@@ -256,25 +256,23 @@ class FirebaseChatCore {
       query = query.startAt(startAt);
     }
 
-    return query.snapshots().map(
-          (snapshot) => snapshot.docs.fold<List<types.Message>>(
-            [],
-            (previousValue, doc) {
-              final data = doc.data();
-              final author = room.users.firstWhere(
-                (u) => u.id == data['authorId'],
-                orElse: () => types.User(id: data['authorId'] as String),
-              );
-
-              data['author'] = author.toJson();
-              data['createdAt'] = data['createdAt']?.millisecondsSinceEpoch;
-              data['id'] = doc.id;
-              data['updatedAt'] = data['updatedAt']?.millisecondsSinceEpoch;
-
-              return [...previousValue, types.Message.fromJson(data)];
-            },
-          ),
+    return query.snapshots().map((snapshot) {
+      return snapshot.docs.map((doc) {
+        final data = doc.data();
+        final author = room.users.firstWhere(
+              (u) => u.id == data['authorId'],
+          orElse: () => types.User(id: data['authorId'] as String),
         );
+
+        data['author'] = author.toJson();
+        data['createdAt'] = data['createdAt']?.millisecondsSinceEpoch;
+        data['id'] = doc.id;
+        data['updatedAt'] = data['updatedAt']?.millisecondsSinceEpoch;
+
+        return types.Message.fromJson(data);
+      }
+      ).toList();
+    });
   }
 
   /// Returns a stream of changes in a room from Firebase.
