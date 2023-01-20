@@ -256,22 +256,37 @@ class FirebaseChatCore {
       query = query.startAt(startAt);
     }
 
-    return query.snapshots().map((snapshot) {
-      return snapshot.docs.map((doc) {
+    return query.snapshots().asyncExpand((snapshot) async* {
+      final messages = <types.Message>[];
+      for (var doc in snapshot.docs) {
         final data = doc.data();
-        final author = room.users.firstWhere(
-              (u) => u.id == data['authorId'],
-          orElse: () => types.User(id: data['authorId'] as String),
-        );
-
-        data['author'] = author.toJson();
+        int index = room.users.indexWhere((u) => u.id == data['authorId']);
+        if(index < 0) {
+          final collection = getFirebaseFirestore()
+              .collection(config.usersCollectionName);
+          final userDoc = await collection.doc(data['authorId']).get();
+          if(userDoc.exists) {
+            var userData = userDoc.data()!;
+            // convert timestamps to int, to avoid exceptions
+            userData['createdAt'] = userData['createdAt']?.millisecondsSinceEpoch;
+            userData['updatedAt'] = userData['updatedAt']?.millisecondsSinceEpoch;
+            userData['lastSeen'] = userData['lastSeen']?.millisecondsSinceEpoch;
+            userData['id'] = data['authorId'];
+            data['author'] = userData;
+          } else {
+            final auther = types.User(id: data['authorId']);
+            data['author'] = auther.toJson();
+          }
+        } else {
+          data['author'] = room.users[index].toJson();
+        }
         data['createdAt'] = data['createdAt']?.millisecondsSinceEpoch;
         data['id'] = doc.id;
         data['updatedAt'] = data['updatedAt']?.millisecondsSinceEpoch;
 
-        return types.Message.fromJson(data);
+        messages.add(types.Message.fromJson(data));
       }
-      ).toList();
+      yield messages;
     });
   }
 
